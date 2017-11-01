@@ -16,7 +16,7 @@ require_relative './get_objects_endpoint'
 class VendEndpointError < StandardError; end
 
 class VendEndpoint < EndpointBase::Sinatra::Base
-  VESRION = '0.0.1'.freeze
+  VESRION = '0.0.1'
   extend GetObjectsEndpoint
 
   set :logging, true
@@ -105,7 +105,12 @@ class VendEndpoint < EndpointBase::Sinatra::Base
       payload = @payload[:purchase_order]
       response = client.send_purchase_order(payload)
       code = 200
-      if payload['status'] != 'CANCELLED'
+      if payload['status'] == 'CANCELLED'
+      # ignore cancelled orders
+      elsif payload['txn_type'] == 'RECEIPT'
+        # update receipts only
+        Vend::PurchaseOrderBuilder.new(response.to_h, client).to_hash
+      else
         add_object 'purchase_order', Vend::PurchaseOrderBuilder.new(response.to_h, client).to_hash
         set_summary "Added purchase order #{response['name']} to Vend"
       end
@@ -125,7 +130,12 @@ class VendEndpoint < EndpointBase::Sinatra::Base
       payload = @payload[:transfer_order]
       response = client.send_purchase_order(payload)
       code = 200
-      if payload['status'] != 'CANCELLED'
+      if payload['status'] == 'CANCELLED'
+      # ignore cancelled orders
+      elsif payload['txn_type'] == 'RECEIPT'
+        # update receipts only
+        Vend::PurchaseOrderBuilder.new(response.to_h, client).to_hash
+      else
         add_object 'transfer_order', Vend::PurchaseOrderBuilder.new(response.to_h, client).to_hash
         set_summary "Added transfer order #{response['name']} to Vend"
       end

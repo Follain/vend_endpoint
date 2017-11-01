@@ -110,6 +110,7 @@ module Vend
                 consignment_id: po_id,
                 product_id: line_item['product_id'],
                 count: line_item['quantity'],
+                received: line_item['received'] || 0,
                 cost: line_item['unit_price'].to_i,
                 sequence_number: index
               }.to_json
