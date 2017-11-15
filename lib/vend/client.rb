@@ -22,11 +22,13 @@ module Vend
       self.class.base_uri "https://#{site_id}.vendhq.com/api/"
     end
 
+    poll :customers
     poll vendors: :suppliers
     poll :outlets
     poll purchase_orders: :consignments
     poll :products
     poll register_sales: :sales
+    poll tax_rates: :taxes
 
     def send_order(payload)
       order_placed_hash = Vend::OrderBuilder.order_placed(self, payload)
@@ -177,11 +179,6 @@ module Vend
       inventories
     end
 
-    def get_customers(poll_customer_timestamp)
-      response = retrieve_customers(poll_customer_timestamp, nil, nil)
-      response['customers'].to_a.map { |customer| Vend::CustomerBuilder.parse_customer(customer) }
-    end
-
     def get_orders(poll_order_timestamp)
       options = {
         headers: headers,
@@ -279,26 +276,6 @@ module Vend
         @registers[register['name']] = register['id']
       end
       @registers[register_name]
-    end
-
-    def retrieve_customers(poll_customer_timestamp, email, id)
-      options = {
-        headers: headers,
-        query: { page_size: 100 }
-      }
-      options[:query][:since] = poll_customer_timestamp if poll_customer_timestamp
-      options[:query][:email] = email if email
-      options[:query][:id]    = id if id
-
-      customers = { 'customers' => [] }
-      paginate(options) do
-        response = self.class.get('/customers', options)
-        validate_response(response)
-
-        customers['customers'] = customers['customers'].concat(response['customers'])
-        response
-      end
-      customers
     end
 
     def retrieve_outlets(poll_outlet_timestamp)

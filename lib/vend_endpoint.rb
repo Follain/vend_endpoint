@@ -33,10 +33,12 @@ class VendEndpoint < EndpointBase::Sinatra::Base
   end
 
   get_endpoint :outlet
+  get_endpoint :customer
   get_endpoint :product
   get_endpoint :purchase_order
   get_endpoint :vendor
   get_endpoint :register_sale
+  get_endpoint :tax_rate
 
   post '/get_purchase_order' do
     begin
