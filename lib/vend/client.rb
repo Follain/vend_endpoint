@@ -278,6 +278,26 @@ module Vend
       @registers[register_name]
     end
 
+    def retrieve_customers(poll_customer_timestamp, email, id)
+      options = {
+        headers: headers,
+        query: { page_size: 100 }
+      }
+      options[:query][:since] = poll_customer_timestamp if poll_customer_timestamp
+      options[:query][:email] = email if email
+      options[:query][:id]    = id if id
+
+      customers = { 'customers' => [] }
+      paginate(options) do
+        response = self.class.get('/customers', options)
+        validate_response(response)
+
+        customers['customers'] = customers['customers'].concat(response['customers'])
+        response
+      end
+      customers
+    end
+
     def retrieve_outlets(poll_outlet_timestamp)
       options = {
         headers: headers,
