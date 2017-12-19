@@ -188,11 +188,6 @@ class VendEndpoint < EndpointBase::Sinatra::Base
   end
 
   #
-  #   Honeybadger.configure do |config|
-  #     config.api_key = ENV['HONEYBADGER_KEY']
-  #     config.environment_name = ENV['RACK_ENV']
-  #   end
-  #
   #   def self.get_endpoint(name, method, path = nil)
   #     post (path || "/get_#{name.pluralize}") do
   #       begin
@@ -300,6 +295,7 @@ class VendEndpoint < EndpointBase::Sinatra::Base
 
   def error_notification(error)
     log_exception(error)
+    Honeybadger.notify error
     set_summary "A Vend POS Endpoint error has ocurred: #{error.message}"
   end
 
