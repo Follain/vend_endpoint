@@ -112,10 +112,10 @@ class VendEndpoint < EndpointBase::Sinatra::Base
       elsif payload['txn_type'] == 'RECEIPT'
         # update receipts only
         Vend::PurchaseOrderBuilder.new(response.to_h, client).to_hash
-      else
-        add_object 'purchase_order', Vend::PurchaseOrderBuilder.new(response.to_h, client).to_hash
-        set_summary "Added purchase order #{response['name']} to Vend"
-      end
+        else
+          add_object 'purchase_order', Vend::PurchaseOrderBuilder.new(response.to_h, client).to_hash
+          set_summary "Added purchase order #{response['name']} to Vend"
+        end
     rescue VendEndpointError => e
       code = 500
       set_summary "Validation error has ocurred: #{e.message}"
@@ -134,13 +134,14 @@ class VendEndpoint < EndpointBase::Sinatra::Base
       code = 200
       if payload['status'] == 'CANCELLED'
       # ignore cancelled orders
+        cancel_transfer_xref(payload['transfer_name'])
       elsif payload['txn_type'] == 'RECEIPT'
         # update receipts only
         Vend::PurchaseOrderBuilder.new(response.to_h, client).to_hash
-      else
-        add_object 'transfer_order', Vend::PurchaseOrderBuilder.new(response.to_h, client).to_hash
-        set_summary "Added transfer order #{response['name']} to Vend"
-      end
+        else
+          add_object 'transfer_order', Vend::PurchaseOrderBuilder.new(response.to_h, client).to_hash
+          set_summary "Added transfer order #{response['name']} to Vend"
+        end
     rescue VendEndpointError => e
       code = 500
       set_summary "Validation error has ocurred: #{e.message}"
@@ -302,4 +303,19 @@ class VendEndpoint < EndpointBase::Sinatra::Base
   def client
     @client ||= Vend::Client.new(settings.site_id, settings.token)
   end
+
+  def cancel_transfer_xref(name)
+    if reference = ExternalReference.transfer_orders
+                                    .find_by(identifier: name + 'SENT')
+      reference.object['vend']['status'] = 'CANCELLED'
+      reference.save!
+    end
+
+    if reference = ExternalReference.transfer_orders
+                                    .find_by(identifier: name + 'RECEIVED')
+      reference.object['vend']['status'] = 'CANCELLED'
+      reference.save!
+    end
+  end
+
 end
