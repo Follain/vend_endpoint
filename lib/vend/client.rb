@@ -1,15 +1,16 @@
 # frozen_string_literal: true
 
-require 'httparty'
+require 'httmultiparty'
 require 'peach'
 require_relative './poll_client'
+require 'open-uri'
 
 module Vend
   class Client
-    include ::HTTParty
-    extend ::Vend::PollClient
+    include ::HTTMultiParty
+    extend  ::Vend::PollClient
 
-    attr_reader :site_id, :headers
+    attr_reader :site_id, :headers, :multi_header
 
     def initialize(site_id, personal_token)
       @site_id = site_id
@@ -19,6 +20,11 @@ module Vend
         'Authorization' => "Bearer #{personal_token}"
       }
 
+      @multi_header = {
+        'content-type' => 'multipart/form-data',
+        'Accept' => 'application/json',
+        'Authorization' => "Bearer #{personal_token}"
+      } 
       self.class.base_uri "https://#{site_id}.vendhq.com/api/"
     end
 
@@ -44,12 +50,18 @@ module Vend
 
     def send_product(payload)
       product_hash = Vend::ProductBuilder.build(self, payload)
-
       options = {
         headers: headers,
         body: product_hash.to_json
       }
 
+      response = self.class.post('/products', options)
+
+      validate_response(response)
+    end
+
+    def update_inventory(payload)
+      options = {headers: headers, body: payload.to_json }
       response = self.class.post('/products', options)
 
       validate_response(response)
@@ -244,7 +256,7 @@ module Vend
     end
 
     def find_product_by_id(product_id)
-      self.class.get("/products/#{product_id}", headers: headers)['products'].first
+      self.class.get("/2.0/products/#{product_id}", headers: headers)['data']
     end
 
     def find_supplier_by_id(supplier_id)
@@ -361,6 +373,34 @@ module Vend
       end
       @shipping_product
     end
+
+    def get_sku_product(sku)
+        options = {
+          headers: headers,
+          query: { type: 'products',
+            sku: sku
+           }
+        }
+        response = self.class.get('/2.0/search', options)
+
+        validate_response(response)
+        @sku_product = response['data']
+
+    end
+
+    def delete_product(id)
+        response = self.class.delete "/products/#{id}", headers: headers
+        validate_response(response)
+    end
+
+    def upload_product_image(id,url)
+      temp=open(url)
+      if temp.present?
+          options = {headers: multi_header, query: {image: File.new(temp)}}
+          response = self.class.post "/2.0/products/#{id}/actions/image_upload" , options
+          validate_response(response)
+      end
+  end
 
     private
 
