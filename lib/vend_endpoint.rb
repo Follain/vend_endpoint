@@ -170,6 +170,28 @@ class VendEndpoint < EndpointBase::Sinatra::Base
     process_result code
   end
 
+  post '/update_inventory' do
+    begin
+        if @payload[:inventory].present?
+          response = client.update_inventory(@payload[:inventory])
+          set_summary "update inventory #{response['sku']} to Vend"
+          code = 200
+        else
+          code = 200
+          set_summary "update inventory skip to Vend"
+        end
+      rescue VendEndpointError => e
+        code = 500
+        set_summary "Validation error has ocurred: #{e.message}"
+      rescue => e
+        code = 500
+        error_notification(e)
+      end
+
+
+      process_result code
+  end
+
   post '/add_order' do
     begin
       @payload[:order][:register] = @config['vend_register']
@@ -188,111 +210,75 @@ class VendEndpoint < EndpointBase::Sinatra::Base
     process_result code
   end
 
-  #
-  #   def self.get_endpoint(name, method, path = nil)
-  #     post (path || "/get_#{name.pluralize}") do
-  #       begin
-  #         timestamp = "vend_poll_#{name}_timestamp"
-  #         since = @config[timestamp] || (@payload['last_poll'] && Time.at(@payload['last_poll']).utc.iso8601)
-  #         objects = client.send("get_#{name.pluralize}", since)
-  #
-  #         objects.each do |object|
-  #           add_object name, object
-  #         end
-  #
-  #         add_value name.pluralize, [] if objects.count < 1
-  #
-  #         add_parameter timestamp, Time.now.utc.iso8601
-  #
-  #         code = 200
-  #         set_summary "#{objects.size} #{name.pluralize(objects.size)} retrieved from Vend POS." if objects.any?
-  #       rescue VendEndpointError => e
-  #         code = 500
-  #         set_summary "Validation error has ocurred: #{e.message}"
-  #       rescue => e
-  #         code = 500
-  #         error_notification(e)
-  #       end
-  #
-  #       process_result code
-  #     end
-  #   end
-  #
-  #   get_endpoint "customers", :get_customers
-  #   get_endpoint "inventory", :get_inventory, "/get_inventory"
-  #   get_endpoint "orders", :get_orders
-  #   get_endpoint "outlets", :get_outlets
-  #   get_endpoint "products", :get_products
-  #   get_endpoint "purchase_orders", :get_purchase_orders
-  #
-  #   post "/get_pending_purchase_order" do
-  #     name = "purchase_orders"
-  #     begin
-  #       objects = client.get_pending_purchase_order(@payload['pending_purchase_order']['vend_id'])
-  #
-  #       objects.each do |object|
-  #         add_object "pending_purchase_order", object
-  #       end
-  #
-  #       add_value "pending_purchase_orders", [] if objects.count < 1
-  #
-  #       code = 200
-  #       set_summary "#{objects.size} #{name.pluralize(objects.size)} retrieved from Vend POS." if objects.any?
-  #     rescue VendEndpointError => e
-  #       code = 500
-  #       set_summary "Validation error has ocurred: #{e.message}"
-  #     rescue => e
-  #       code = 500
-  #       error_notification(e)
-  #     end
-  #
-  #     process_result code
-  #   end
-  #
-  #   post %r{(add_customer|update_customer)$} do
-  #     begin
-  #       if request.fullpath.match /add_customer/
-  #         response = client.send_new_customer(@payload[:customer])
-  #       else
-  #         response = client.send_update_customer(@payload[:customer])
-  #       end
-  #       code     = 200
-  #       set_summary "The customer #{@payload[:customer][:firstname]} #{@payload[:customer][:lastname]} was sent to Vend POS."
-  #     rescue VendEndpointError => e
-  #       code = 500
-  #       set_summary "Validation error has ocurred: #{e.message}"
-  #     rescue => e
-  #       code = 500
-  #       error_notification(e)
-  #     end
-  #
-  #     process_result code
-  #   end
-  #
-  #   post %r{(add_product|update_product)$} do
-  #     begin
-  #       if request.fullpath.match /add_product/
-  #         @payload[:product]['source_id'] = ( @payload[:product].has_key?('source_id') ? @payload[:product]['source_id'] : @payload[:product]['id'] )
-  #         @payload[:product].delete('id')
-  #       end
-  #       @payload[:product]['variants'].each do |variant|
-  #         product = @payload[:product].dup
-  #         product.merge!(variant)
-  #         response = client.send_product(product)
-  #       end
-  #
-  #       code     = 200
-  #       set_summary "The product #{@payload[:product][:name]} #{@payload[:product][:name]} was sent to Vend POS."
-  #     rescue VendEndpointError => e
-  #       code = 500
-  #       set_summary "Validation error has ocurred: #{e.message}"
-  #     rescue => e
-  #       code = 500
-  #       error_notification(e)
-  #     end
-  #
-  #     process_result code
-  #   end
+  post '/add_product' do
+       begin
+        if Array(@payload[:product]['variants']).any?
+          @payload[:product]['variants'].each do |variant|
+              product = @payload[:product].dup
+              variant['handle']=variant['old_handle']||payload['product']['handle']
+              variant['description']=payload['product']['description']
+              variant['name']=payload['product']['name']
+              variant['option_value']=variant['option_value']||variant['old_option_value']||'def'
+              variant['option_name']=variant['option_name']||variant['old_option_name']||'color'
+              if variant['id'].nil?
+                 verify_sku(variant)
+              else
+                  # if sku has been deleted if so empty out id so vend will recreate
+                  resp=client.find_product_by_id(variant['id'])
+                  if !resp.present? || !resp['deleted_at'].nil?
+                    variant['id']=nil
+                    verify_sku(variant)
+                  else
+                    @sku_changed=variant['changed']
+                  end
+              end
+          if  @sku_changed
+              product.merge!(variant)
+              response = client.send_product(product)
+              ExternalReference.record :product, variant['sku'] , { vend: response['product'] },vend_id: response['product']['id']
+
+              if response['product']['id'].present? &&
+                !response['images'].present? &&
+                variant['image'].present?
+                uploadresponse=client.upload_product_image(response['product']['id'],variant['image'])
+              end
+          end
+        end
+          end
+
+        code = 200
+       set_summary "The product #{@payload[:product][:name]} #{@payload[:product][:name]} was sent to Vend POS."
+
+       rescue VendEndpointError => e
+         code = 500
+         set_summary "Validation error has ocurred: #{e.message}"
+       rescue => e
+         code = 500
+         error_notification(e)
+       end
+
+      process_result code
+     end
+
+
+  def verify_sku(variant)
+    resp=client.get_sku_product(variant['sku'])&.detect {|f| f["sku"] = variant['sku'] }
+    if resp.present?
+      @sku_changed = ( variant['changed'] == true ||
+                    variant['sku'] != resp['sku'] ||
+                    payload['product']['name'] != resp['base_name'] ||
+                    variant['id'] != resp['id'] ||
+                    variant['price'].to_f != resp['price'].to_f ||
+                    variant['cost_price'].to_f != resp['supply_price'].to_f) ||
+                  ( variant['image'].present? && !resp['images'].present? )
+
+      #grab vend data if avaliable
+      variant['id'] = resp['id']
+      variant['handle'] = resp['handle']
+      else @sku_changed = true
+    end
+
+  end
 
   def error_notification(error)
     log_exception(error)
