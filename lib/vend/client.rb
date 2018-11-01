@@ -63,8 +63,9 @@ module Vend
     def update_inventory(payload)
       options = {headers: headers, body: payload.to_json }
       response = self.class.post('/products', options)
-      # ignore deleted products
-      if response['details'] == 'Cannot update a deleted product'
+      # ignore deleted & system products
+      if response['details'] == 'Cannot update a deleted product' ||
+         response['details'] == 'You cannot edit a SYSTEM product'
         response
       else
         validate_response(response)
