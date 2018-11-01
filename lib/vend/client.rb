@@ -24,7 +24,7 @@ module Vend
         'content-type' => 'multipart/form-data',
         'Accept' => 'application/json',
         'Authorization' => "Bearer #{personal_token}"
-      } 
+      }
       self.class.base_uri "https://#{site_id}.vendhq.com/api/"
     end
 
@@ -63,8 +63,12 @@ module Vend
     def update_inventory(payload)
       options = {headers: headers, body: payload.to_json }
       response = self.class.post('/products', options)
-
-      validate_response(response)
+      # ignore deleted products
+      if response['details'] == 'Cannot update a deleted product'
+        response
+      else
+        validate_response(response)
+      end
     end
 
     def send_supplier(payload)
