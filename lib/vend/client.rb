@@ -196,6 +196,18 @@ module Vend
       inventories
     end
 
+    def get_inventory_by_id(id)
+      product=self.class.get("/2.0/products/#{id}/inventory", headers: headers)['data']
+      inventories = []
+      (product || []).each do |inventory|
+          inventories << {
+            'outlet_id'  => inventory['outlet_id'],
+            'count'   => inventory['inventory_level']
+          }
+        end
+        {inventory:inventories}
+    end
+
     def get_orders(poll_order_timestamp)
       options = {
         headers: headers,

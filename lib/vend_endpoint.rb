@@ -215,30 +215,50 @@ class VendEndpoint < EndpointBase::Sinatra::Base
         if Array(@payload[:product]['variants']).any?
           @payload[:product]['variants'].each do |variant|
               product = @payload[:product].dup
-              variant['handle']=variant['old_handle']||payload['product']['handle']
               variant['description']=payload['product']['description']
               variant['name']=payload['product']['name']
-              variant['option_value']=variant['option_value']||variant['old_option_value']||'def'
-              variant['option_name']=variant['option_name']||variant['old_option_name']||'color'
+              variant['handle']=variant['old_handle']||payload['product']['handle']
               if variant['id'].nil?
                  verify_sku(variant)
               else
                   # if sku has been deleted if so empty out id so vend will recreate
-                  resp=client.find_product_by_id(variant['id'])
-                  if !resp.present? || !resp['deleted_at'].nil?
+                  current_product=client.find_product_by_id(variant['id'])
+                  if !current_product.present? || !current_product['deleted_at'].nil?
                     variant['id']=nil
                     verify_sku(variant)
                   else
-                    @sku_changed=variant['changed']
+                    #copy active status if found ... do not want to chnage the status
+                    variant['active'] = if current_product['active'] then 1 else 0 end
+                    @has_image=current_product['images'].present?
+                    @restructure_req= current_product['has_variants'] &&
+                                      current_product['variant_count'].nil? &&
+                                      !current_product['is_composite']
+                    @sku_changed=variant['changed'] || @restructure_req
                   end
               end
+
+          if @restructure_req
+            #copy inventory before deleting will be reused on add
+            copy_inventory=client.get_inventory_by_id(variant['id'])
+            if copy_inventory[:inventory].any?
+              variant.merge!(copy_inventory)
+            end
+            #delete the old single variant
+            del_resp=client.delete_product(variant['id'])
+            #set id to nil it will re-add it
+            #keep old active status
+            #use solidus handle when restructuring
+            variant['id']=nil
+            variant['handle']=payload['product']['handle']
+          end
+
           if  @sku_changed
               product.merge!(variant)
               response = client.send_product(product)
               ExternalReference.record :product, variant['sku'] , { vend: response['product'] },vend_id: response['product']['id']
 
               if response['product']['id'].present? &&
-                !response['images'].present? &&
+                !@has_image &&
                 variant['image'].present?
                 uploadresponse=client.upload_product_image(response['product']['id'],variant['image'])
               end
@@ -262,19 +282,24 @@ class VendEndpoint < EndpointBase::Sinatra::Base
 
 
   def verify_sku(variant)
-    resp=client.get_sku_product(variant['sku'])&.detect {|f| f["sku"] = variant['sku'] }
-    if resp.present?
-      @sku_changed = ( variant['changed'] == true ||
-                    variant['sku'] != resp['sku'] ||
-                    payload['product']['name'] != resp['base_name'] ||
-                    variant['id'] != resp['id'] ||
-                    variant['price'].to_f != resp['price'].to_f ||
-                    variant['cost_price'].to_f != resp['supply_price'].to_f) ||
-                  ( variant['image'].present? && !resp['images'].present? )
+    current_product=client.get_sku_product(variant['sku'])&.detect {|f| f["sku"] = variant['sku'] }
+    if current_product.present?
+        @sku_changed = ( variant['changed'] == true ||
+                      variant['sku'] != current_product['sku'] ||
+                      payload['product']['name'] != current_product['base_name'] ||
+                      variant['id'] != current_product['id'] ||
+                      variant['price'].to_f != current_product['price'].to_f ||
+                      variant['cost_price'].to_f != current_product['supply_price'].to_f) ||
+                    ( variant['image'].present? && !current_product['images'].present? )
 
-      #grab vend data if avaliable
-      variant['id'] = resp['id']
-      variant['handle'] = resp['handle']
+        #grab vend data if avaliable
+        variant['id'] = current_product['id']
+        variant['handle'] = current_product['handle']
+        variant['active'] = if current_product['active'] then 1 else 0 end
+        @has_image=current_product['images'].present?
+        @restructure_req=current_product['has_variants'] &&
+                        current_product['variant_count'].nil? &&
+                        !current_product['is_composite']
       else @sku_changed = true
     end
 

@@ -8,7 +8,6 @@ module Vend
         sku = payload['sku'].presence
         hash = {
             'source_id'         => payload['variant_id'],
-            'source_variant_id' => payload['variant_id'],
             'handle'            => payload['handle'],
             'tags'              => payload['tags'],
             'name'              => payload['name'],
@@ -20,12 +19,25 @@ module Vend
             'supply_price'      => payload['cost_price'],
             'brand_name'        => payload['brand'],
             'department'        => payload['department'],
-            'category'          => payload['category'],
-            'variant_option_one_name' => payload['option_name'],
-            'variant_option_one_value' => payload['option_value']
-        }
+            'category'          => payload['category']
+            }
 
         hash[:id] = payload['id'] if payload.has_key?('id')
+        hash[:inventory] = payload['inventory'] if payload.has_key?('inventory')
+
+            %w(one two three).each_with_index do |opt, index|
+                if payload['options'].present? && payload["options"][index].present?
+                  hash.merge!(
+                    "variant_option_#{opt}_name" => payload["options"][index]['option_name'],
+                    "variant_option_#{opt}_value" => payload["options"][index]['option_value']
+                  )
+                  else
+                    hash.merge!(
+                      "variant_option_#{opt}_name" => nil,
+                      "variant_option_#{opt}_value" => nil
+                    )
+                end
+              end
 
         hash
       end
