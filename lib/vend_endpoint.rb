@@ -237,19 +237,23 @@ class VendEndpoint < EndpointBase::Sinatra::Base
                   end
               end
 
-          if @restructure_req
+          #only restructure items that are not variants in solidus
+          if @restructure_req && !variant['options'].present?
             #copy inventory before deleting will be reused on add
             copy_inventory=client.get_inventory_by_id(variant['id'])
-            if copy_inventory[:inventory].any?
-              variant.merge!(copy_inventory)
-            end
             #delete the old single variant
             del_resp=client.delete_product(variant['id'])
             #set id to nil it will re-add it
             #keep old active status
             #use solidus handle when restructuring
-            variant['id']=nil
-            variant['handle']=payload['product']['handle']
+            #if we cant delete it do not restructure it ! as it will create duplicates
+            if  del_resp['status']!='error'
+                if copy_inventory[:inventory].any?
+                  variant.merge!(copy_inventory)
+                end
+                variant['id']=nil
+                variant['handle']=payload['product']['handle']
+            end
           end
 
           if  @sku_changed
