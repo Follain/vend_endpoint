@@ -203,6 +203,8 @@ module Vend
       end
 
       def build_customer_based_on_order(payload)
+        #gift card orders do not always have address
+        if payload['shipping_address'].present?
         {
           'firstname'        => payload['shipping_address']['firstname'],
           'lastname'         => payload['shipping_address']['lastname'],
@@ -210,7 +212,16 @@ module Vend
           'shipping_address' => payload['shipping_address'],
           'billing_address'  => payload['shipping_address']
         }
-      end
+        else
+        {
+          'firstname'        => nil,
+          'lastname'         => nil,
+          'email'            => payload['email'],
+          'shipping_address' => nil,
+          'billing_address'  => nil
+        }
+        end
+    end
 
       def build_shipping_from_items(vend_order)
         shipping_adjstment = nil
