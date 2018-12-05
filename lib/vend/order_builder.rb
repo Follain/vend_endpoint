@@ -204,7 +204,7 @@ module Vend
 
       def build_customer_based_on_order(payload)
         #gift card orders do not always have address
-        if payload['shipping_address'].present?
+        if !payload['shipping_address'].nil?
         {
           'firstname'        => payload['shipping_address']['firstname'],
           'lastname'         => payload['shipping_address']['lastname'],
