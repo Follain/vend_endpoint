@@ -17,6 +17,8 @@ module GetObjectsEndpoint
                    case   po_type
                      when 'OUTLET'
                           add_object 'transfer_order', object
+                     when 'RETURN'
+                          add_object 'rtv', object
                      when 'SUPPLIER'
                           add_object 'purchase_order', object
                      when 'STOCKTAKE'

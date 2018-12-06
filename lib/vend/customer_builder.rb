@@ -11,6 +11,7 @@ module Vend
       end
 
       def build_new_customer(client, payload)
+        if !payload['shipping_address'].nil?
         hash = {
           'email'               => payload['email'],
           'first_name'          => payload['shipping_address']['firstname'],
@@ -22,6 +23,19 @@ module Vend
           'physical_state'      => payload['shipping_address']['state'],
           'physical_country_id' => payload['shipping_address']['country']
         }
+      else
+        hash = {
+          'email'               => payload['email'],
+          'first_name'          => nil,
+          'last_name'           => nil,
+          'physical_address1'   => nil,
+          'physical_address2'   => nil,
+          'physical_postcode'   => nil,
+          'physical_city'       => nil,
+          'physical_state'      => nil,
+          'physical_country_id' => nil
+        }
+      end
         hash['customer_code'] = payload['email']
         hash
       end
