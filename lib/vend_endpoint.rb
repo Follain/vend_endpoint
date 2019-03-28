@@ -133,7 +133,7 @@ class VendEndpoint < EndpointBase::Sinatra::Base
       payload = @payload[:transfer_order]
       if payload['txn_type'] == 'RECEIPT'
          # if status = received do not receive again ... else it dups in vend
-         status = client.get_purchase_order_status(payload['consignment_id'])
+         status = client.get_purchase_order_status(consignment_id: payload['consignment_id'])
       end
     if status!='RECEIVED'
       #update vend only if not previously received!
