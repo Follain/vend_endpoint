@@ -248,6 +248,12 @@ module Vend
       end
     end
 
+    def get_purchase_order_status(consignment_id:)
+      options = { headers: headers }
+      response = self.class.get("/2.0/consignments/#{consignment_id}", options)
+      response['data']['status']
+    end
+
     def payment_type_id(payment_method)
       return @payments[payment_method] if @payments
 

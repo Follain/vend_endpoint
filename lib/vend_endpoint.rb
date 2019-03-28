@@ -129,15 +129,22 @@ class VendEndpoint < EndpointBase::Sinatra::Base
 
   post '/add_transfer_order' do
     begin
+      code = 200
       payload = @payload[:transfer_order]
+      if payload['txn_type'] == 'RECEIPT'
+         # if status = received do not receive again ... else it dups in vend
+         status = client.get_purchase_order_status(payload['consignment_id'])
+      end
+    if status!='RECEIVED'
+      #update vend only if not previously received!
       response = client.send_purchase_order(payload)
       code = 200
-      if payload['status'] == 'CANCELLED'
+    end
+    if payload['status'] == 'CANCELLED'
       # ignore cancelled orders
         cancel_transfer_xref(payload['transfer_name'])
       elsif payload['txn_type'] == 'RECEIPT'
-        # update receipts only
-        Vend::PurchaseOrderBuilder.new(response.to_h, client).to_hash
+        # update receipts only nothing else
         else
           add_object 'transfer_order', Vend::PurchaseOrderBuilder.new(response.to_h, client).to_hash
           set_summary "Added transfer order #{response['name']} to Vend"
