@@ -23,7 +23,7 @@ module Vend
     end
 
     def name
-      @name = if payload['txn_type'].in? %W(RECEIPT SHIPMENT TRANSFER)
+      @name = if payload['txn_type'].in? %W(RECEIPT SHIPMENT TRANSFER AUTORECEIVE)
                 payload['name']
               else "[#{payload['id']}] #{payload['name']}".squish
               end

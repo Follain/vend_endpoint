@@ -92,7 +92,7 @@ module Vend
         headers: headers,
         body: purchase_order_hash.to_json
       }
-
+      
       order_type = payload['type']
       # trap this error, critical as it will create a corrupt po in Vend
       if order_type == 'SUPPLIER' && payload['supplier_id'].nil?
@@ -101,34 +101,55 @@ module Vend
       end
 
       consignment_id = payload['consignment_id']
+
+      response =  if consignment_id.nil?
+                    vend_new_po(options,payload)
+                  elsif payload['status'] == 'CANCELLED'
+                    vend_cancel_po(options,consignment_id)
+                  elsif payload['status'] == 'SENT'
+                    vend_update_po(options,consignment_id,payload)
+                  elsif payload['txn_type'] == 'AUTORECEIVE'
+                    vend_auto_receive_po(options,consignment_id,payload)
+                  end
+      validate_response(response)
+    end
+
+    def vend_new_po(options,payload)
+      response=self.class.post '/consignment', options
+      if response.ok?
+        consignment_id= response['id']
+        vend_new_po_lines(payload,consignment_id)
+      end
+      response
+    end
+
+    def vend_update_po(options,consignment_id,payload)
       existing_line_items = []
+      existing_line_items = self.class.get("/consignment_product?consignment_id=#{consignment_id}", headers: headers)['consignment_products']
+      response=self.class.put "/consignment/#{consignment_id}", options
 
-      response = if consignment_id.nil?
-                   self.class.post '/consignment', options
-                 elsif payload['status'] == 'CANCELLED'
-                   self.class.delete "/consignment/#{consignment_id}", options
-                 else
-                   existing_line_items = self.class.get("/consignment_product?consignment_id=#{consignment_id}", headers: headers)['consignment_products']
-                   self.class.put "/consignment/#{consignment_id}", options
-                 end
-
-      if response.ok? && payload['status'] != 'CANCELLED'
-        po_id = response['id']
-        response['line_items'] = []
+      if response.ok?
         existing_line_items.peach(3) do |line_item|
-          line_item_response = self.class.delete "/consignment_product/#{line_item['id']}", headers: headers
-          raise "Failed to remove line item: #{line_item_response}" unless line_item_response.ok?
-        end
+        line_item_response = self.class.delete "/consignment_product/#{line_item['id']}", headers: headers
+        raise "Failed to remove line item: #{line_item_response}" unless line_item_response.ok?
+      end
 
-        line_items = payload['line_items']
-        line_items.each_with_index.peach(3) do |line_item, index|
+      vend_new_po_lines(payload,consignment_id)
+      response
+    end
+
+    def vend_new_po_lines(payload,consignment_id)
+
+      line_items = payload['line_items']
+      line_items.each_with_index.peach(3) do |line_item, index|
+
           if line_item['product_id']
             line_item_payload = {
               headers: headers,
               body: {
-                consignment_id: po_id,
+                consignment_id: consignment_id,
                 product_id: line_item['product_id'],
-                count: line_item['quantity'],
+                count: line_item['quantity'] || line_item['count'] || 0,
                 received: line_item['received'] || 0,
                 cost: line_item['unit_price'].to_i,
                 sequence_number: index
@@ -143,8 +164,24 @@ module Vend
           end
         end
       end
+    end
 
-      validate_response(response)
+    def vend_cancel_po(options,consignment_id)
+      response=self.class.delete "/consignment/#{consignment_id}", options
+    end
+
+    def vend_auto_receive_po(options,consignment_id,payload)
+      existing_line_items = []
+      existing_line_items = self.class.get("/consignment_product?consignment_id=#{consignment_id}", headers: headers)['consignment_products']
+
+      if existing_line_items.any?
+        existing_line_items.peach(3) do |line_item|
+          line_item['received']=line_item['count']
+          line_item_response = self.class.put "/consignment_product/#{line_item['id']}", {headers: headers, body: line_item.to_json}
+          raise "Failed to update line item: #{line_item_response}" unless line_item_response.ok?
+        end
+      end
+      response=self.class.put "/consignment/#{consignment_id}", options
     end
 
     def send_new_customer(payload)
