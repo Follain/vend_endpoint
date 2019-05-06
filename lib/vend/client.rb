@@ -134,8 +134,8 @@ module Vend
           raise "Failed to remove line item: #{line_item_response}" unless line_item_response.ok?
           end
         vend_new_po_lines(payload,consignment_id)
-        response
       end
+      response
     end
 
     def vend_new_po_lines(payload,consignment_id)
