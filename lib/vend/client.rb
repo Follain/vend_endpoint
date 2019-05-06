@@ -168,7 +168,6 @@ module Vend
     end
 
     def vend_auto_receive_po(options,consignment_id,payload)
-      existing_line_items = []
       response['line_items'] = []
       existing_line_items = self.class.get("/consignment_product?consignment_id=#{consignment_id}", headers: headers)['consignment_products']
 
@@ -176,7 +175,6 @@ module Vend
         existing_line_items.peach(3) do |line_item|
           line_item['received']=line_item['count']
           line_item_response = self.class.put "/consignment_product/#{line_item['id']}", {headers: headers, body: line_item.to_json}
-          response['line_items'] << line_item_response.to_h
           raise "Failed to update line item: #{line_item_response}" unless line_item_response.ok?
         end
       end
