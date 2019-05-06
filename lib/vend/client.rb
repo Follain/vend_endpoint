@@ -118,7 +118,7 @@ module Vend
       response=self.class.post '/consignment', options
       if response.ok?
         consignment_id= response['id']
-        vend_new_po_lines(payload,consignment_id)
+        vend_new_po_lines(payload,consignment_id,response)
       end
       response
     end
@@ -133,16 +133,15 @@ module Vend
           line_item_response = self.class.delete "/consignment_product/#{line_item['id']}", headers: headers
           raise "Failed to remove line item: #{line_item_response}" unless line_item_response.ok?
           end
-        vend_new_po_lines(payload,consignment_id)
+        vend_new_po_lines(payload,consignment_id,response)
       end
       response
     end
 
-    def vend_new_po_lines(payload,consignment_id)
-
+    def vend_new_po_lines(payload,consignment_id,response)
       line_items = payload['line_items']
+      response['line_items'] = []
       line_items.each_with_index.peach(3) do |line_item, index|
-
           if line_item['product_id']
             line_item_payload = {
               headers: headers,
@@ -155,7 +154,6 @@ module Vend
                 sequence_number: index
               }.to_json
             }
-
             line_item_response = self.class.post('/consignment_product', line_item_payload)
             raise "Failed to add line item: #{line_item_response}" unless line_item_response.ok?
             response['line_items'] << line_item_response.to_h
@@ -171,12 +169,14 @@ module Vend
 
     def vend_auto_receive_po(options,consignment_id,payload)
       existing_line_items = []
+      response['line_items'] = []
       existing_line_items = self.class.get("/consignment_product?consignment_id=#{consignment_id}", headers: headers)['consignment_products']
 
       if existing_line_items.any?
         existing_line_items.peach(3) do |line_item|
           line_item['received']=line_item['count']
           line_item_response = self.class.put "/consignment_product/#{line_item['id']}", {headers: headers, body: line_item.to_json}
+          response['line_items'] << line_item_response.to_h
           raise "Failed to update line item: #{line_item_response}" unless line_item_response.ok?
         end
       end
