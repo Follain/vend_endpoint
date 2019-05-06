@@ -92,7 +92,7 @@ module Vend
         headers: headers,
         body: purchase_order_hash.to_json
       }
-      
+
       order_type = payload['type']
       # trap this error, critical as it will create a corrupt po in Vend
       if order_type == 'SUPPLIER' && payload['supplier_id'].nil?
@@ -129,13 +129,13 @@ module Vend
       response=self.class.put "/consignment/#{consignment_id}", options
 
       if response.ok?
-        existing_line_items.peach(3) do |line_item|
-        line_item_response = self.class.delete "/consignment_product/#{line_item['id']}", headers: headers
-        raise "Failed to remove line item: #{line_item_response}" unless line_item_response.ok?
+          existing_line_items.peach(3) do |line_item|
+          line_item_response = self.class.delete "/consignment_product/#{line_item['id']}", headers: headers
+          raise "Failed to remove line item: #{line_item_response}" unless line_item_response.ok?
+          end
+        vend_new_po_lines(payload,consignment_id)
+        response
       end
-
-      vend_new_po_lines(payload,consignment_id)
-      response
     end
 
     def vend_new_po_lines(payload,consignment_id)
@@ -163,7 +163,6 @@ module Vend
             raise "Missing line item: #{line_item} ,please add this item to vend!"
           end
         end
-      end
     end
 
     def vend_cancel_po(options,consignment_id)
