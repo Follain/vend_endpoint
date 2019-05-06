@@ -168,7 +168,6 @@ module Vend
     end
 
     def vend_auto_receive_po(options,consignment_id,payload)
-      response['line_items'] = []
       existing_line_items = self.class.get("/consignment_product?consignment_id=#{consignment_id}", headers: headers)['consignment_products']
 
       if existing_line_items.any?
