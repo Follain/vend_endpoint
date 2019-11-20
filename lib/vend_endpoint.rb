@@ -240,12 +240,12 @@ class VendEndpoint < EndpointBase::Sinatra::Base
                     @restructure_req= current_product['has_variants'] &&
                                       current_product['variant_count'].nil? &&
                                       !current_product['is_composite']
-                    @sku_changed=variant['changed'] || @restructure_req
+                    @sku_changed=variant['changed']
                   end
               end
 
           #only restructure items that are not variants in solidus
-          if @restructure_req && !variant['options'].present?
+          if @restructure_req && !variant['options'].present? & false
             #copy inventory before deleting will be reused on add
             copy_inventory=client.get_inventory_by_id(variant['id'])
             #delete the old single variant
@@ -269,7 +269,7 @@ class VendEndpoint < EndpointBase::Sinatra::Base
               ExternalReference.record :product, variant['sku'] , { vend: response['product'] },vend_id: response['product']['id']
 
               if response['product']['id'].present? &&
-                !@has_image &&
+                !@has_image && false
                 variant['image'].present?
                 uploadresponse=client.upload_product_image(response['product']['id'],variant['image'])
               end
@@ -297,11 +297,7 @@ class VendEndpoint < EndpointBase::Sinatra::Base
     if current_product.present?
         @sku_changed = ( variant['changed'] == true ||
                       variant['sku'] != current_product['sku'] ||
-                      payload['product']['name'] != current_product['base_name'] ||
-                      variant['id'] != current_product['id'] ||
-                      variant['price'].to_f != current_product['price'].to_f ||
-                      variant['cost_price'].to_f != current_product['supply_price'].to_f) ||
-                    ( variant['image'].present? && !current_product['images'].present? )
+                      variant['id'] != current_product['id'])
 
         #grab vend data if avaliable
         variant['id'] = current_product['id']
